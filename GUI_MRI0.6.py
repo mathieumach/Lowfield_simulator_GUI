@@ -21,7 +21,6 @@ import interactiveAxesPlot_Gausspass as pltaxes_gauss
 import interactiveAxesPlot_Nonlocalpass as pltaxes_nonlocal
 import interactivePlot_SNR as pltsnr
 from Sequences import *
-from Grad_distortion_functions import *
 from scipy import signal
 from scipy import constants
 from scipy.ndimage import zoom
@@ -36,7 +35,7 @@ from scipy.interpolate import RectBivariateSpline
 from numpy import inf
 from scipy.ndimage import gaussian_filter
 from skimage.restoration import denoise_nl_means, estimate_sigma # estimate_sigma --> wavelet-based estimator of the (Gaussian) noise standard deviation.
-from skimage.metrics import peak_signal_noise_ratio
+import webbrowser
 
 # For matplotlib plots on a window:
 # First, we need to create the figure object using the Figure() class. 
@@ -48,6 +47,107 @@ root.title("Low field MRI simulator")
 root.state('zoomed') # To have a full screen display
 
 ##### FUNCTIONS #####
+# function to be called when keyboard buttons are pressed
+def update(event):
+    """
+    Updating function when keyboard buttons are pressed, the time of scan, bandwidth/pixel, the size of the data matrix, the minimum TE (or TR in SSFP) and the minimum TE and the b coefficient for the diffusion sequence are automatically updated
+    
+    Input: event --> when a keyboard is pressed
+    Output: None
+    
+    """
+    global Pre_def_seq
+    global TR
+    global TE
+    global TI
+    global TI2
+    global FOV
+    global Data_mat
+    global Resolution
+    global Bandwidth
+    global dif_TEmin
+    global minimumTE
+    global minimumTR    
+    
+    global Time_scan_num_label
+    global Data_mat1_label
+    global Bd_by_pixel_label
+    global SNR_num_label
+    global minimumTE_num_label
+    global minimumTR_num_label
+    
+    # Diffusion parameters
+    global Bval_label
+    global TEminval_label
+    global B
+    global dif_TEmin
+    
+    TR = TR_entry.get();        TR = int(TR);   TR = np.divide(TR,1000) # Divide by 1000 to have the values in milli
+    TE = TE_entry.get();        TE = int(TE);   TE = np.divide(TE,1000)
+    TI = TI_entry.get();        TI = int(TI);   TI = np.divide(TI,1000)
+    TI2 = TI2_entry.get();      TI2 = int(TI2); TI2 = np.divide(TI2,1000)
+    fov1 = FOV1_entry.get();    fov1 = int(fov1)
+    fov2 = FOV2_entry.get();    fov2 = int(fov2)
+    fov3 = FOV3_entry.get();    fov3 = int(fov3)
+    res1 = Res1_entry.get();    res1 = float(res1) 
+    res2 = Res2_entry.get();    res2 = float(res2)
+    res3 = Res3_entry.get();    res3 = float(res3)
+    bd = Bandwidth_entry.get(); Bandwidth = int(bd)
+    Alpha = Alpha_entry.get();  Alpha = int(Alpha)
+    ETL = ETL_entry.get();      ETL = int(ETL)
+    FOV = [fov1, fov2, fov3]
+    Resolution = [res1, res2, res3]
+    Data_mat = np.divide(FOV, Resolution)
+    Data_mat = [int(Data_mat[0]), int(Data_mat[1]), int(Data_mat[2])]
+    
+    time_scan = TR * Data_mat[1] * Data_mat[2]
+    
+    if Pre_def_seq == 'TSE':
+        ETL = ETL_entry.get(); ETL = int(ETL)
+        time_scan = time_scan/ETL
+
+    time = datetime.timedelta(seconds=time_scan) # Converts amount of seconds to hours:minutes:seconds
+    Bd_by_pixel = np.divide(Bandwidth,Data_mat[0])
+    
+    Time_scan_num_label.grid_forget()
+    Data_mat1_label.grid_forget()
+    Bd_by_pixel_label.grid_forget()
+    
+    Time_scan_num_label = Label(frame3, text = str(time), font=("Helvetica", 12));               Time_scan_num_label.grid(row = 1, column = 7)    
+    s = str(Data_mat[0]) + "x" + str(Data_mat[1]) + "x" + str(Data_mat[2])
+    Data_mat1_label = Label(frame3, text = s, font=("Helvetica", 12));                           Data_mat1_label.grid(row = 2, column = 7)
+    Bd_by_pixel_label = Label(frame3, text = str(round(Bd_by_pixel,2)), font=("Helvetica", 12)); Bd_by_pixel_label.grid(row = 3, column = 7)
+    
+    # minimum TE and TR
+    minimumTE = Data_mat[0]/(2*Bandwidth)
+    minimumTR = 2*minimumTE
+    minimumTE_num_label.grid_forget()
+    
+    if Pre_def_seq == 'SSFP':
+        minimumTE_label = Label(frame3, text = "TRmin (ms) ", font=("Helvetica", 12)).grid(row = 5, column = 6)
+        minimumTE_num_label = Label(frame3, text = np.round(minimumTR * 1000,2), font=("Helvetica", 12))
+        minimumTE_num_label.grid(row = 5, column = 7)
+    else:
+        minimumTE_label = Label(frame3, text = "TEmin (ms)", font=("Helvetica", 12)).grid(row = 5, column = 6)
+        minimumTE_num_label = Label(frame3, text = np.round(minimumTE * 1000,2), font=("Helvetica", 12))
+        minimumTE_num_label.grid(row = 5, column = 7)
+        
+    # B and minTE for diffusion sequence
+    if Pre_def_seq == 'Dif':
+        gamma =  42.58*(10**6)#*2*constants.pi      # gyromagnetic ratio for hydrogen 42.58 [MHz/T] 
+
+        G = G_entry.get(); G = float(G); G = np.divide(G,1000)
+        smalldelta = smalldelta_entry.get(); smalldelta = float(smalldelta); smalldelta = np.divide(smalldelta,1000)
+        bigdelta = bigdelta_entry.get(); bigdelta = float(bigdelta); bigdelta = np.divide(bigdelta,1000)
+
+        B = (bigdelta - smalldelta/3)*(gamma*G*smalldelta)**2; 
+        dif_TEmin = smalldelta + bigdelta; 
+
+        Bval_label.grid_forget()
+        Bval_label = Label(frame3, text = np.round(B,2), font=("Helvetica", 12));              Bval_label.grid(row = 7, column = 4)
+        TEminval_label.grid_forget()
+        TEminval_label = Label(frame3, text = np.round(dif_TEmin*1000,2), font=("Helvetica", 12)); TEminval_label.grid(row = 8, column = 4)
+
 # Reset function
 def reset():
     """
@@ -215,75 +315,6 @@ def SNR_vis():
         SNR_define = 'yes'
 
 #/////////////////////// FUNCTIONS FOR THE SEQUENCES ///////////////////////#
-
-# Function computing the b coef and the TEmin related to the diffusion seq
-def b_TEmin():
-    """
-    Computes and prints the minimum TE and the b coefficient for the diffusion sequence
-
-    Input : None
-    Output: None
-    """    
-    global Bval_label
-    global TEminval_label
-    global B
-    global dif_TEmin
-
-    gamma =  42.58*(10**6)#*2*constants.pi      # gyromagnetic ratio for hydrogen 42.58 [MHz/T] 
-    
-    G = G_entry.get(); G = float(G); G = np.divide(G,1000)
-    smalldelta = smalldelta_entry.get(); smalldelta = float(smalldelta); smalldelta = np.divide(smalldelta,1000)
-    bigdelta = bigdelta_entry.get(); bigdelta = float(bigdelta); bigdelta = np.divide(bigdelta,1000)
-    
-    B = (bigdelta - smalldelta/3)*(gamma*G*smalldelta)**2; 
-    dif_TEmin = smalldelta + bigdelta; 
-
-    Bval_label.grid_forget()
-    Bval_label = Label(frame3, text = np.round(B,2), font=("Helvetica", 12));              Bval_label.grid(row = 6, column = 4)
-    TEminval_label.grid_forget()
-    TEminval_label = Label(frame3, text = np.round(dif_TEmin*1000,2), font=("Helvetica", 12)); TEminval_label.grid(row = 7, column = 4)
-    
-def TETRmin():
-    """
-    Computes and prints the minimum TE (or TR) for a sequence to be simulated
-    
-    Input: None
-    Output: None
-    """
-    global TE
-    global FOV
-    global Data_mat
-    global Resolution
-    global Bandwidth
-    global minimumTE_num_label
-    
-    TE = TE_entry.get(); TE = int(TE); TE = np.divide(TE,1000) # Divide by 1000 to have the values in milli
-    fov1 = FOV1_entry.get(); fov1 = int(fov1)
-    fov2 = FOV2_entry.get(); fov2 = int(fov2)
-    fov3 = FOV3_entry.get(); fov3 = int(fov3)
-    res1 = Res1_entry.get(); res1 = float(res1) 
-    res2 = Res2_entry.get(); res2 = float(res2)
-    res3 = Res3_entry.get(); res3 = float(res3)
-    bd = Bandwidth_entry.get(); Bandwidth = int(bd)
-    FOV = [fov1, fov2, fov3]
-    Resolution = [res1, res2, res3]
-    Data_mat = np.divide(FOV, Resolution)
-    Data_mat = [int(Data_mat[0]), int(Data_mat[1]), int(Data_mat[2])]
-    
-    minimumTE = Data_mat[0]/(2*Bandwidth)
-    minimumTR = 2*minimumTE
-    
-    minimumTE_num_label.grid_forget()
-    
-    if Pre_def_seq == 'SSFP':
-        minimumTE_label = Label(frame3, text = "TRmin (ms) ", font=("Helvetica", 12)).grid(row = 5, column = 6)
-        minimumTE_num_label = Label(frame3, text = np.round(minimumTR * 1000,2), font=("Helvetica", 12))
-        minimumTE_num_label.grid(row = 5, column = 7)
-    else:
-        minimumTE_label = Label(frame3, text = "TEmin (ms)", font=("Helvetica", 12)).grid(row = 5, column = 6)
-        minimumTE_num_label = Label(frame3, text = np.round(minimumTE * 1000,2), font=("Helvetica", 12))
-        minimumTE_num_label.grid(row = 5, column = 7)
-    
 def showTEeff(*args):
     """
     Computes and prints the effective TE for the TSE sequence
@@ -316,24 +347,28 @@ def remove_widgets(seq):
     Input : seq --> string of Pre_def_seq
     Output: None
     """
-    if seq == 'SE':
+    if seq == 'SE':        
         TE_entry.grid_forget();         TE_label.grid_forget()
     elif seq == 'GE':
         TE_entry.grid_forget();         TE_label.grid_forget()
         Alpha_entry.grid_forget();      Alpha_label.grid_forget()
     elif seq == 'IN':
+        frame5.grid_forget()
         TE_entry.grid_forget();         TE_label.grid_forget()
         TI_entry.grid_forget();         TI_label.grid_forget()
     elif seq == 'Double IN':
+        frame5.grid_forget()
         TE_entry.grid_forget();         TE_label.grid_forget()
         TI_entry.grid_forget();         TI_label.grid_forget()
         TI2_entry.grid_forget();        TI2_label.grid_forget()
     elif seq == 'FLAIR':
+        frame5.grid_forget()
         TE_entry.grid_forget();         TE_label.grid_forget()
         TI_entry.grid_forget();         TI_label.grid_forget()
     elif seq == 'Dif':
+        frame5.grid_forget()
         TE_entry.grid_forget();         TE_label.grid_forget()
-        G_label.grid_forget();          G_entry.grid_forget();         bcomput_button.grid_forget()
+        G_label.grid_forget();          G_entry.grid_forget();        
         smalldelta_label.grid_forget(); smalldelta_entry.grid_forget()
         bigdelta_label.grid_forget();   bigdelta_entry.grid_forget()
         B_label.grid_forget()
@@ -389,18 +424,22 @@ def show_widgets(seq):
         TE_label.grid(row = 5, column = 0);         TE_entry.grid(row = 5, column = 1);
         Alpha_label.grid(row = 6, column = 0);      Alpha_entry.grid(row = 6, column = 1)
     elif seq == 'IN':
+        frame5.grid(row = 3, column = 2, rowspan = 3 , columnspan = 4)
         TE_label.grid(row = 5, column = 0);         TE_entry.grid(row = 5, column = 1);
         TI_label.grid(row = 6, column = 0);         TI_entry.grid(row = 6, column = 1); TI_entry.delete(0,END); TI_entry.insert(0, '250')  
     elif seq == 'Double IN':
+        frame5.grid(row = 3, column = 2, rowspan = 3 , columnspan = 4)
         TE_label.grid(row = 5, column = 0);         TE_entry.grid(row = 5, column = 1);
         TI_label.grid(row = 6, column = 0);         TI_entry.grid(row = 6, column = 1); TI_entry.delete(0,END); TI_entry.insert(0, '250')
         TI2_label.grid(row = 7, column = 0);        TI2_entry.grid(row = 7, column = 1)
     elif seq == 'FLAIR':
+        frame5.grid(row = 3, column = 2, rowspan = 3 , columnspan = 4)
         TE_label.grid(row = 5, column = 0);         TE_entry.grid(row = 5, column = 1);
         TI_label.grid(row = 6, column = 0);         TI_entry.grid(row = 6, column = 1); TI_entry.delete(0,END); TI_entry.insert(0, '2561')         
     elif seq == 'Dif':
+        frame5.grid(row = 3, column = 2, rowspan = 3 , columnspan = 4)
         TE_label.grid(row = 5, column = 0);         TE_entry.grid(row = 5, column = 1);
-        G_label.grid(row = 6, column = 0);          G_entry.grid(row = 6, column = 1);  bcomput_button.grid(row = 7, column = 2)
+        G_label.grid(row = 6, column = 0);          G_entry.grid(row = 6, column = 1);  
         smalldelta_label.grid(row = 7, column = 0); smalldelta_entry.grid(row = 7, column = 1)
         bigdelta_label.grid(row = 8, column = 0);   bigdelta_entry.grid(row = 8, column = 1)
         B_label.grid(row = 7, column = 3)
@@ -424,7 +463,6 @@ def show_widgets(seq):
         minimumTE_label = Label(frame3, text = "TEmin (ms)", font=("Helvetica", 12)).grid(row = 5, column = 6)
         minimumTE_num_label = Label(frame3, text = np.round(minimumTE * 1000,2), font=("Helvetica", 12))
         minimumTE_num_label.grid(row = 5, column = 7)
-
 
 # Functions informing the user of predefined sequence selected
 def SE():
@@ -550,6 +588,10 @@ def run():
     Data_mat = [int(Data_mat[0]), int(Data_mat[1]), int(Data_mat[2])]
     S = [int(Data_mat[0]/2),int(Data_mat[1]/2),int(Data_mat[2]/2)]   # S is a vector with the center of the Data matrix
     
+    # Post sequence TSE entries
+    post_TSE_TE = post_TSE_TE_entry.get(); post_TSE_TE = int(post_TSE_TE); post_TSE_TE = np.divide(post_TSE_TE,1000)
+    post_TSE_ETL = post_TSE_ETL_entry.get(); post_TSE_ETL = int(post_TSE_ETL)
+    
     Time_scan_num_label.grid_forget()
     Data_mat1_label.grid_forget()
     Bd_by_pixel_label.grid_forget()
@@ -559,6 +601,8 @@ def run():
     
     minimumTE = Data_mat[0]/(2*Bandwidth)
     minimumTR = 2*minimumTE
+     # c represent the number of point to be computed i the t2 decay signal for TSE and post_seq_TSE
+    c = 10  
     
     if Pre_def_seq == 'SSFP':
         minimumTE_label = Label(frame3, text = "TRmin (ms) ", font=("Helvetica", 12)).grid(row = 5, column = 6)
@@ -737,6 +781,9 @@ def run():
         elif Pre_def_seq == 'IN':
             IN_3D = IN_seq(TR, TE, TI, T1_3D_grad, T2_3D_grad, M0_3D_grad); IN_3D = np.multiply(IN_3D, B1map_3D_grad)
 
+            trajectory = post_traj.get()          
+            IN_3D = TSE_post_seq(post_TSE_TE, post_TSE_ETL, T2_3D_grad, c, trajectory, IN_3D)
+            
             # Resizing
             for x in range(T1_3D.shape[0]):
                 n_seq[x,:,:] = cv2.resize(IN_3D[x,:,:], dsize=(Data_mat[2], Data_mat[1]))
@@ -773,7 +820,6 @@ def run():
 
         elif Pre_def_seq == 'TSE':
             trajectory = traj.get()
-            c = 10
             TSE_3D = TSE_seq(TR, TE, ETL, M0_3D_grad, T1_3D_grad, T2_3D_grad, c, trajectory); TSE_3D = np.multiply(TSE_3D, B1map_3D_grad)
 
             # Resizing
@@ -870,7 +916,7 @@ def run():
             SNR_num_label = Label(frame3, text = 'SNR not yet define!', font=("Helvetica", 12))
             SNR_num_label.grid(row = 4, column = 7)
     
-#//////////////// 3D Parameters visulization //////////////// 
+#//////////////// 3D Parameters and filter visulization //////////////// 
 
 def param_vis():
     global Pre_def_seq
@@ -886,7 +932,6 @@ def param_vis():
     global alp_3D
     global delta_B0_3D
     global B0_3D
-    global b0_3D
     global B1map_3D
     global T1_3D
     global T2_3D
@@ -1419,13 +1464,158 @@ def non_local(H, s, d):
         SNR_num_label = Label(frame3, text = 'SNR not yet define!', font=("Helvetica", 12))
         SNR_num_label.grid(row = 4, column = 7)
     
-#/////////////////////// FRAMES ///////////////////////#
-
+# //////////////////////////////////////////////////////////////////// #
+############# Buttons, entry, labels not in any frame ##################
+# //////////////////////////////////////////////////////////////////// #    
+    
 # Font size parameter
 f = 12 # labels
 e = 10 # entries
+    
+# Reset button
+reset_button = Button(root, text = "Reset images and parameters", font=("Helvetica", f), command = reset).grid(row = 2, column = 0)
 
-##### Frame regarding sequences #####
+# Functions for the settings
+global B0_field
+B0_field = " "
+
+def pr_b0_46(*args):
+    global B0_field
+    global B0_selected_label
+    B0_field = 'B0_46mT'
+    B0_selected_label.grid_forget()
+    B0_selected_label = Label(top, text=B0_field, font=("Helvetica", 16)); B0_selected_label.grid(row = 1, column = 4)
+    
+def pr_b0_15(*args):
+    global B0_field
+    global B0_selected_label
+    B0_field = 'B0_15T'
+    B0_selected_label.grid_forget()
+    B0_selected_label = Label(top, text=B0_field, font=("Helvetica", 16)); B0_selected_label.grid(row = 1, column = 4)
+    
+def pr_b0_3(*args):
+    global B0_field
+    global B0_selected_label
+    B0_field = 'B0_3T'
+    B0_selected_label.grid_forget()
+    B0_selected_label = Label(top, text=B0_field, font=("Helvetica", 16)); B0_selected_label.grid(row = 1, column = 4)
+    
+def show_settings():
+    print(B0_field)
+
+def settings():
+    """
+    Function showing a new window with the different setting the user can choose from (which B0, B1 field to use) 
+    
+    Input: None
+    Output: 
+    
+    """
+    global B0_3D
+    global top
+    global B0_selected_label
+    
+    top = Toplevel()
+    top.title("Settings")
+    
+    # Labels
+    B0_label = Label(top, text="B0 fields", font=("Helvetica", 16)).grid(row = 1, column = 0)
+    B01_label = Label(top, text="46 mT", font=("Helvetica", 16)).grid(row = 0, column = 1)
+    B02_label = Label(top, text="1.5 T", font=("Helvetica", 16)).grid(row = 0, column = 2)
+    B03_label = Label(top, text="3 T", font=("Helvetica", 16)).grid(row = 0, column = 3)
+    B0_label = Label(top, text="B1 field", font=("Helvetica", 16)).grid(row = 2, column = 0)
+    maps_label = Label(top, text="T1/T2/T2*/M0", font=("Helvetica", 16)).grid(row = 3, column = 0)
+    selection_label = Label(top, text="Selection", font=("Helvetica", 16)).grid(row = 0, column = 4)
+    B0_selected_label = Label(top, text=" ", font=("Helvetica", 16)); B0_selected_label.grid(row = 1, column = 4)
+    
+    # Button
+    close_btn = Button(top, text="Close window", command = top.destroy).grid(row = 4, column = 0) # destroy closes the new window
+    show_btn = Button(top, text="show selection", command = show_settings).grid(row = 5, column = 0) # shows the settings selection
+    
+    s = B0_3D.shape
+    B0_46mT = B0_3D[:,:,134]
+    B0_15T = B0_46mT * 32.608 # 1.5T / 46mT ~= 32.608
+    B0_3T = B0_46mT * 65.217  # 3T / 46mT ~= 65.217
+    
+    B0_46mT[B0_46mT==0] = np.nan
+    B0_15T[B0_15T==0] = np.nan
+    B0_3T[B0_3T==0] = np.nan
+
+    imag_size = 4
+    
+    # with different colorbar
+    fig = plt.figure(figsize=(imag_size,imag_size))                
+    plt.imshow(B0_46mT)              
+    plt.axis('off')
+    plt.colorbar()
+    canvas = FigureCanvasTkAgg(fig, top)                          
+    canvas.draw()
+    canvas.get_tk_widget().grid(row = 1, column = 1)     
+    canvas.get_tk_widget().bind('<Button-1>', pr_b0_46)
+    plt.close()
+    
+    fig = plt.figure(figsize=(imag_size,imag_size))                
+    plt.imshow(B0_15T)              
+    plt.axis('off')
+    plt.colorbar()
+    canvas = FigureCanvasTkAgg(fig, top)                          
+    canvas.draw()
+    canvas.get_tk_widget().grid(row = 1, column = 2) 
+    canvas.get_tk_widget().bind('<Button-1>', pr_b0_15)
+    plt.close()
+    
+    fig = plt.figure(figsize=(imag_size,imag_size))                
+    plt.imshow(B0_3T)              
+    plt.axis('off')
+    plt.colorbar()
+    canvas = FigureCanvasTkAgg(fig, top)                          
+    canvas.draw()
+    canvas.get_tk_widget().grid(row = 1, column = 3)     
+    canvas.get_tk_widget().bind('<Button-1>', pr_b0_3)
+    plt.close()
+    
+    # with same colorbar
+    fig = plt.figure(figsize=(imag_size,imag_size))                
+    plt.imshow(B0_46mT)              
+    plt.axis('off')
+    plt.colorbar()
+    plt.clim(0,3.1)
+    canvas = FigureCanvasTkAgg(fig, top)                          
+    canvas.draw()
+    canvas.get_tk_widget().grid(row = 2, column = 1)     
+    plt.close()
+    
+    fig = plt.figure(figsize=(imag_size,imag_size))                
+    plt.imshow(B0_15T)              
+    plt.axis('off')
+    plt.colorbar()
+    plt.clim(0,3.1)
+    canvas = FigureCanvasTkAgg(fig, top)                          
+    canvas.draw()
+    canvas.get_tk_widget().grid(row = 2, column = 2)     
+    plt.close()
+    
+    fig = plt.figure(figsize=(imag_size,imag_size))                
+    plt.imshow(B0_3T)              
+    plt.axis('off')
+    plt.colorbar()
+    plt.clim(0,3.1)
+    canvas = FigureCanvasTkAgg(fig, top)                          
+    canvas.draw()
+    canvas.get_tk_widget().grid(row = 2, column = 3)     
+    plt.close()
+    
+# Settings button
+setting_button = Button(root, text = "Settings", font=("Helvetica", f), command = settings).grid(row = 3, column = 0)
+    
+# //////////////////////////////////////////////////////////////////// #
+############################## Frames ##################################
+# //////////////////////////////////////////////////////////////////// #
+
+
+# //////////////////////////////////////////////////////////////////// #
+#################### Frame regarding the sequences ####################
+# //////////////////////////////////////////////////////////////////// #
 frame1 = LabelFrame(root, text = "Possible sequences to simulate", font=("Helvetica", 15))
 frame1.grid(row = 0, column = 0, rowspan = 2)
 
@@ -1433,29 +1623,54 @@ frame1.grid(row = 0, column = 0, rowspan = 2)
 lab = Label(frame1, text = "Select one sequence: ", font=("Helvetica", f)).grid(row = 0, column = 0)
 
 # Spin Echo button
-TSE_button = Button(frame1, text = "Spin echo", font=("Helvetica", f), command = SE).grid(row = 1, column = 0)
+SE_button = Button(frame1, text = "Spin echo", font=("Helvetica", f), command = SE); SE_button.grid(row = 1, column = 0)
 # Gradient Echo Sequence button
-GES_button = Button(frame1, text = "Gradient echo", font=("Helvetica", f), command = GE).grid(row = 2, column = 0)
+GE_button = Button(frame1, text = "Gradient echo", font=("Helvetica", f), command = GE); GE_button.grid(row = 2, column = 0)
 # Inversion recovery button
-IN_button = Button(frame1, text = "Inversion recovery", font=("Helvetica", f), command = IN).grid(row = 3, column = 0)
+IN_button = Button(frame1, text = "Inversion recovery", font=("Helvetica", f), command = IN); IN_button.grid(row = 3, column = 0)
 # Double inversion recovery button
-double_IN_button = Button(frame1, text = "Double inversion recovery", font=("Helvetica", f), command = double_IN).grid(row = 4, column = 0)
+double_IN_button = Button(frame1, text = "Double inversion recovery", font=("Helvetica", f), command = double_IN); double_IN_button.grid(row = 4, column = 0)
 # FLAIR button
-FLAIR_button = Button(frame1, text = "Fluid-attenuated inversion recovery", font=("Helvetica", f), command = FLAIR).grid(row = 5, column = 0)
+FLAIR_button = Button(frame1, text = "Fluid-attenuated inversion recovery", font=("Helvetica", f), command = FLAIR); FLAIR_button.grid(row = 5, column = 0)
 # TSE button
-TSE_button = Button(frame1, text = "Turbo spin echo", font=("Helvetica", f), command = TSE).grid(row = 6, column = 0)
+TSE_button = Button(frame1, text = "Turbo spin echo", font=("Helvetica", f), command = TSE); TSE_button.grid(row = 6, column = 0)
 # Diffusion button
-Dif_button = Button(frame1, text = "Diffusion", font=("Helvetica", f), command = Diffusion).grid(row = 7, column = 0)
+Dif_button = Button(frame1, text = "Diffusion", font=("Helvetica", f), command = Diffusion); Dif_button.grid(row = 7, column = 0)
 # SSFP button
-SSFP_button = Button(frame1, text = "Stateady-state free precession", font=("Helvetica", f), command = SSFP).grid(row = 8, column = 0)
+SSFP_button = Button(frame1, text = "Stateady-state free precession", font=("Helvetica", f), command = SSFP); SSFP_button.grid(row = 8, column = 0)
 
 global Pre_def_seq
 Pre_def_seq = " "
 seq_label1 = Label(frame1, text = "You have chosen: ", font=("Helvetica", f)).grid(row = 9, column = 0)
 seq_label2 = Label(frame1, text = Pre_def_seq); seq_label2.grid(row = 10, column = 0); seq_label2.grid_forget()
 
-# Reset button
-reset_button = Button(root, text = "Reset images and parameters", font=("Helvetica", f), command = reset).grid(row = 2, column = 0)
+# The functions giving the user information for each sequences (they open specific webpages with webbrowser.open)
+def info_SE(*args):
+    webbrowser.open("https://mriquestions.com/spin-echo1.html")
+def info_GE(*args):
+    webbrowser.open("https://mriquestions.com/gradient-echo.html")
+def info_IN(*args):
+    webbrowser.open("https://mriquestions.com/what-is-ir.html")
+def info_double_IN(*args):
+    webbrowser.open("https://www.mriquestions.com/double-ir.html")
+def info_FLAIR(*args):
+    webbrowser.open("https://en.wikipedia.org/wiki/Fluid-attenuated_inversion_recovery")
+def info_TSE(*args):
+    webbrowser.open("https://mriquestions.com/what-is-fsetse.html")
+def info_Dif(*args):
+    webbrowser.open("https://en.wikipedia.org/wiki/Diffusion_MRI")
+def info_SSFP(*args):
+    webbrowser.open("https://mriquestions.com/what-is-ssfp.html")
+
+# Binding functions to open webpages that offers the user information on the specific sequences (what is spin echo, TSE, etc...?) 
+SE_button.bind('<Button-3>', info_SE)
+GE_button.bind('<Button-3>', info_GE)
+IN_button.bind('<Button-3>', info_IN)
+double_IN_button.bind('<Button-3>', info_double_IN)
+FLAIR_button.bind('<Button-3>', info_FLAIR)
+TSE_button.bind('<Button-3>', info_TSE)
+Dif_button.bind('<Button-3>', info_Dif)
+SSFP_button.bind('<Button-3>', info_SSFP)
 
 # //////////////////////////////////////////////////////////////////// #
 #################### Frame regarding the parameters ####################
@@ -1491,9 +1706,39 @@ G_label = Label(frame3, text = "G (mT/mm) ", font=("Helvetica", f));            
 smalldelta_label = Label(frame3, text = "small delta (ms) ", font=("Helvetica", f));       smalldelta_label.grid(row = 10, column = 0)
 bigdelta_label = Label(frame3, text = "big delta (ms) ", font=("Helvetica", f));           bigdelta_label.grid(row = 11, column = 0)
 B_label = Label(frame3, text = "b (s/mm2) ", font=("Helvetica", f));                       B_label.grid(row = 9, column = 3)
-TEmin_label = Label(frame3, text = "TEmin (ms) ", font=("Helvetica", f));                  TEmin_label.grid(row = 10, column = 3)
+TEmin_label = Label(frame3, text = "TEmin diffusion (ms) ", font=("Helvetica", f));        TEmin_label.grid(row = 10, column = 3)
 Bval_label = Label(frame3, text = "302.18", font=("Helvetica", f));                        Bval_label.grid(row = 9, column = 4)
 TEminval_label = Label(frame3, text = "3.0", font=("Helvetica", f));                       TEminval_label.grid(row = 10, column = 4)
+
+# Frame of the post sequence TSE
+frame5 = LabelFrame(frame3, text = "Post sequence TSE", font=("Helvetica", 15))
+frame5.grid(row = 3, column = 2, rowspan = 3 , columnspan = 4)
+
+def post_showTEeff(*args):
+    post_trajectory = post_traj.get()
+
+# Labels
+Post_seq_TSE_TE_label = Label(frame5, text = "TE (ms) ", font=("Helvetica", f))          
+Post_seq_TSE_TE_label.grid(row = 0, column = 0)
+Post_seq_TSE_ETL_label = Label(frame5, text = "ETL ", font=("Helvetica", f))            
+Post_seq_TSE_ETL_label.grid(row = 1, column = 0)
+post_seq_TSE_traj_label = Label(frame5, text = "Kspace trajectory ", font = ("Helvetica", f))    
+post_seq_TSE_traj_label.grid(row = 0, column = 2) 
+# Dropdown menu to select kspace trajectory in post sequence TSE   
+options = [
+    "Linear",
+    "In-out",
+    "Out-in"
+]
+post_traj = StringVar()
+post_traj.set("No selection")                                           # Default value, or could use; options[0]
+post_tse_drop = OptionMenu(frame5, post_traj, *options, command = post_showTEeff) # Using a list, NEEDS a star in front
+post_tse_drop.grid(row = 1, column = 2)
+# Entries
+post_TSE_TE_entry = Entry(frame5, font=("Helvetica", e));  post_TSE_TE_entry.grid(row = 0, column = 1); post_TSE_TE_entry.insert(0, '20')
+post_TSE_ETL_entry = Entry(frame5, font=("Helvetica", e));   post_TSE_ETL_entry.grid(row = 1, column = 1);  post_TSE_ETL_entry.insert(0, '8')
+
+frame5.grid_forget()
 
 # Entries of the parameters
 # Parameters that will always be shown
@@ -1514,10 +1759,7 @@ ETL_entry = Entry(frame3, font=("Helvetica", e));       ETL_entry.grid(row = 8, 
 G_entry = Entry(frame3, font=("Helvetica", e));         G_entry.grid(row = 9, column = 1);          G_entry.insert(0, '10')
 smalldelta_entry = Entry(frame3, font=("Helvetica",e)); smalldelta_entry.grid(row = 10, column = 1);smalldelta_entry.insert(0, '1')
 bigdelta_entry = Entry(frame3, font=("Helvetica", e));  bigdelta_entry.grid(row = 11, column = 1);  bigdelta_entry.insert(0, '2')
-
-# Button to compute the b parameter in diffusion sequence
-bcomput_button = Button(frame3, text = "Compute b", font=("Helvetica", f), command = b_TEmin)
-bcomput_button.grid(row = 10, column = 2);  
+  
 # Dropdown menu to select kspace trajectory in TSE sequence   
 options = [
     "Linear",
@@ -1530,9 +1772,9 @@ tse_drop = OptionMenu(frame3, traj, *options, command = showTEeff) # Using a lis
 tse_drop.grid(row = 8, column = 1)
 
 # Hide the labels and the entries of specific sequences, they will appear only if the sequence where they are involed is selected
-# (Label ---- Entry ---- Button ---- Dropdown)
-TE_label.grid_forget();         TE_entry.grid_forget();                                          tse_drop.grid_forget()
-TI_label.grid_forget();         TI_entry.grid_forget();         bcomput_button.grid_forget()
+# (Label ---- Entry ---- Dropdown)
+TE_label.grid_forget();         TE_entry.grid_forget();           tse_drop.grid_forget()
+TI_label.grid_forget();         TI_entry.grid_forget();         
 TI2_label.grid_forget();        TI2_entry.grid_forget()
 Alpha_label.grid_forget();      Alpha_entry.grid_forget()
 ETL_label.grid_forget();        ETL_entry.grid_forget()
@@ -1551,7 +1793,7 @@ TEminval_label.grid_forget()
 B = 302.18
 dif_TEmin = np.divide(3.0,1000)
 # This value is computed from the initial FOV, resolution, bandwidth values ( 128/(50000*2) = 0.00128)
-minimumTE = 0.00128 * 1000 
+minimumTE = 0.00128 * 1000 # *1000 to have it in ms
 minimumTR = 2 * minimumTE
 
 # Labels of the parameters computed from input ones
@@ -1563,14 +1805,12 @@ minimumTE_label = Label(frame3, text = "TEmin (ms) ", font=("Helvetica", f));   
 minimumTR_label = Label(frame3, text = "TRmin (ms) ", font=("Helvetica", f));         minimumTE_label.grid(row = 5, column = 6);  minimumTR_label.grid_forget()
 
 Time_scan_num_label = Label(frame3, text = "2:16:32", font=("Helvetica", f));         Time_scan_num_label.grid(row = 1, column = 7)
-Data_mat1_label = Label(frame3, text = "390.62", font=("Helvetica", f));              Data_mat1_label.grid(row = 2, column = 7)
-Bd_by_pixel_label = Label(frame3, text = "128x128x128", font=("Helvetica", f));       Bd_by_pixel_label.grid(row = 3, column = 7)
+Data_mat1_label = Label(frame3, text = "128x128x128", font=("Helvetica", f));              Data_mat1_label.grid(row = 2, column = 7)
+Bd_by_pixel_label = Label(frame3, text = "390.62", font=("Helvetica", f));       Bd_by_pixel_label.grid(row = 3, column = 7)
 SNR_num_label = Label(frame3, text = "      ", font=("Helvetica", f));                SNR_num_label.grid(row = 4, column = 7)
 minimumTE_num_label = Label(frame3, text = minimumTE, font=("Helvetica", f));         minimumTE_num_label.grid(row = 5, column = 7)
 minimumTR_num_label = Label(frame3, text = minimumTR, font=("Helvetica", f));         minimumTR_num_label.grid(row = 5, column = 8); minimumTR_num_label.grid_forget()
 
-# Button to compute the minimum TE (or TR)
-min_TETR_button = Button(frame3, text = "Compute TE/TR min", font=("Helvetica", f), command = TETRmin).grid(row = 6, column = 6)
 # Button to define the boxes used in the computation of the SNR
 SNR_vis_button = Button(frame3, text = "Setting & visualize SNR", font=("Helvetica", f), command = SNR_vis).grid(row = 7, column = 6, columnspan = 2)
 SNR_length = 0
@@ -1581,70 +1821,58 @@ SNR_define = 'no' # String keeping track if the boxes to compute the SNR have be
 # Button for applying the parameters and simulate the chosen sequence
 Run_seq_button = Button(frame3, text = "Run sequence", font=("Helvetica", 18), command = run).grid(row = 15, column = 5)
 
-
-# function to be called when
-# keyboard buttons are pressed
-def update(event):
-    
-    global Pre_def_seq
-    global TR
-    global TE
-    global TI
-    global TI2
-    global FOV
-    global Data_mat
-    global Resolution
-    global Bandwidth
-    global dif_TEmin
-    global minimumTE
-    global minimumTR
-    
-    global Time_scan_num_label
-    global Data_mat1_label
-    global Bd_by_pixel_label
-    global SNR_num_label
-    global minimumTE_num_label
-    global minimumTR_num_label
-    
-    TR = TR_entry.get();        TR = int(TR);   TR = np.divide(TR,1000) # Divide by 1000 to have the values in milli
-    TE = TE_entry.get();        TE = int(TE);   TE = np.divide(TE,1000)
-    TI = TI_entry.get();        TI = int(TI);   TI = np.divide(TI,1000)
-    TI2 = TI2_entry.get();      TI2 = int(TI2); TI2 = np.divide(TI2,1000)
-    fov1 = FOV1_entry.get();    fov1 = int(fov1)
-    fov2 = FOV2_entry.get();    fov2 = int(fov2)
-    fov3 = FOV3_entry.get();    fov3 = int(fov3)
-    res1 = Res1_entry.get();    res1 = float(res1) 
-    res2 = Res2_entry.get();    res2 = float(res2)
-    res3 = Res3_entry.get();    res3 = float(res3)
-    bd = Bandwidth_entry.get(); Bandwidth = int(bd)
-    Alpha = Alpha_entry.get();  Alpha = int(Alpha)
-    ETL = ETL_entry.get();      ETL = int(ETL)
-    FOV = [fov1, fov2, fov3]
-    Resolution = [res1, res2, res3]
-    Data_mat = np.divide(FOV, Resolution)
-    Data_mat = [int(Data_mat[0]), int(Data_mat[1]), int(Data_mat[2])]
-    
-    time_scan = TR * Data_mat[1] * Data_mat[2]
-    
-    if Pre_def_seq == 'TSE':
-        ETL = ETL_entry.get(); ETL = int(ETL)
-        time_scan = time_scan/ETL
-
-    time = datetime.timedelta(seconds=time_scan) # Converts amount of seconds to hours:minutes:seconds
-    Bd_by_pixel = np.divide(Bandwidth,Data_mat[0])
-    
-    Time_scan_num_label.grid_forget()
-    Data_mat1_label.grid_forget()
-    Bd_by_pixel_label.grid_forget()
-    
-    Time_scan_num_label = Label(frame3, text = str(time), font=("Helvetica", 12));               Time_scan_num_label.grid(row = 1, column = 7)    
-    s = str(Data_mat[0]) + "x" + str(Data_mat[1]) + "x" + str(Data_mat[2])
-    Data_mat1_label = Label(frame3, text = s, font=("Helvetica", 12));                           Data_mat1_label.grid(row = 2, column = 7)
-    Bd_by_pixel_label = Label(frame3, text = str(round(Bd_by_pixel,2)), font=("Helvetica", 12)); Bd_by_pixel_label.grid(row = 3, column = 7)
-
 # Binding the keyboard with the main window, to be able to change the scan duration, bandwidth/pixel, etc... in real time
 root.bind('<Key>', update)
 
+# The functions giving the user information for each label (they open specific webpages with webbrowser.open)
+def info_tr_te(*args):
+    webbrowser.open("https://mriquestions.com/tr-and-te.html")
+def info_ti(*args):
+    webbrowser.open("https://mriquestions.com/ti-to-null-a-tissue.html")
+def info_ti2(*args):
+    webbrowser.open("https://www.mriquestions.com/double-ir.html")
+def info_alpha(*args):
+    webbrowser.open("https://mriquestions.com/what-is-flip-angle.html")
+def info_etl(*args):
+    webbrowser.open("https://mriquestions.com/fse-parameters.html")
+def info_Kspace_traj(*args):
+    webbrowser.open("https://mriquestions.com/k-space-trajectories.html")
+def info_teeff(*args):
+    webbrowser.open("https://mriquestions.com/fse-parameters.html")
+def info_G(*args):
+    webbrowser.open("https://mriquestions.com/what-is-the-b-value.html")
+def info_smalldelta(*args):
+    webbrowser.open("https://mriquestions.com/what-is-the-b-value.html")
+def info_bigdelta(*args):
+    webbrowser.open("https://mriquestions.com/what-is-the-b-value.html")
+def info_B(*args):
+    webbrowser.open("https://mriquestions.com/tr-and-te.html")
+def info_bd(*args):   
+    webbrowser.open('https://mriquestions.com/receiver-bandwidth.html')
+def info_fov(*args):   
+    webbrowser.open('https://mriquestions.com/field-of-view-fov.html')
+def info_res(*args):   
+    webbrowser.open('https://mriquestions.com/image-resolution.html')
+def info_snr(*args):   
+    webbrowser.open('https://mriquestions.com/signal-to-noise.html')
+
+# Binding function to open webpage that offers the user information on the specific label (what is TR, TE, etc...?)    
+TR_label.bind('<Button-3>', info_tr_te)
+TE_label.bind('<Button-3>', info_tr_te)
+TI_label.bind('<Button-3>', info_ti)
+TI2_label.bind('<Button-3>', info_ti2)
+Alpha_label.bind('<Button-3>', info_alpha)
+ETL_label.bind('<Button-3>', info_etl)
+Kspace_traj_label.bind('<Button-3>', info_Kspace_traj)
+TEeff_label.bind('<Button-3>', info_teeff)
+G_label.bind('<Button-3>', info_G)
+smalldelta_label.bind('<Button-3>', info_smalldelta)
+bigdelta_label.bind('<Button-3>', info_bigdelta)
+B_label.bind('<Button-3>', info_B)
+Bandwidth_label.bind('<Button-3>', info_bd)
+FOV1_label.bind('<Button-3>', info_fov)
+Resolution1_label.bind('<Button-3>', info_res)
+SNR_label.bind('<Button-3>', info_snr)
 
 # ///////////////////////////////////////////////////////////////////////// #
 #################### Frame regarding the post-processing ####################
@@ -1669,10 +1897,14 @@ Non_local_h_entry = Entry(frame4, font=("Helvetica", e), width = 5);     Non_loc
 Non_local_psize_entry = Entry(frame4, font=("Helvetica", e), width = 5); Non_local_psize_entry.grid(row = 4, column = 2); Non_local_psize_entry.insert(0, '7')
 Non_local_pdist_entry = Entry(frame4, font=("Helvetica", e), width = 5); Non_local_pdist_entry.grid(row = 4, column = 3); Non_local_pdist_entry.insert(0, '11')
 ### Buttons (Lambda is to use the parentheses and arguments)
-Low_pass_button = Button(frame4, text = "Low-pass filter", font=("Helvetica", f), command = lambda: lowpass(low_pass_entry.get())).grid(row = 1, column = 4)
-High_pass_button = Button(frame4, text = "High-pass filter", font=("Helvetica", f), command = lambda: highpass(high_pass_entry.get())).grid(row = 2, column = 4)
-Gaussian_button = Button(frame4, text = "Gaussian filter", font=("Helvetica", f), command = lambda: gauss(Gauss_entry.get())).grid(row = 3, column = 4) 
-Non_local_button = Button(frame4, text = "Non local filter", font=("Helvetica", f), command = lambda: non_local(Non_local_h_entry.get(), Non_local_psize_entry.get(), Non_local_pdist_entry.get())).grid(row = 4, column = 4) 
+Low_pass_button = Button(frame4, text = "Low-pass filter", font=("Helvetica", f), command = lambda: lowpass(low_pass_entry.get()))
+Low_pass_button.grid(row = 1, column = 4)
+High_pass_button = Button(frame4, text = "High-pass filter", font=("Helvetica", f), command = lambda: highpass(high_pass_entry.get()))
+High_pass_button.grid(row = 2, column = 4)
+Gaussian_button = Button(frame4, text = "Gaussian filter", font=("Helvetica", f), command = lambda: gauss(Gauss_entry.get()))
+Gaussian_button.grid(row = 3, column = 4) 
+Non_local_button = Button(frame4, text = "Non local filter", font=("Helvetica", f), command = lambda: non_local(Non_local_h_entry.get(), Non_local_psize_entry.get(), Non_local_pdist_entry.get()))
+Non_local_button.grid(row = 4, column = 4) 
 
 Param_vis_button = Button(frame4, text = "Parameters visualization", font=("Helvetica", f), command = param_vis).grid(row = 6, column = 1, columnspan = 3)
 
@@ -1687,6 +1919,22 @@ fi = StringVar()
 fi.set("No selection")                                               # Default value, or could use; options[0]
 filter_drop = OptionMenu(frame4, fi, *options, command = filter_vis) # Using a list, NEEDS a star in front
 filter_drop.grid(row = 5, column = 3)
+
+# The functions giving the user information for each label (they open specific webpages with webbrowser.open)
+def info_lowpass(*args):
+    webbrowser.open("https://en.wikipedia.org/wiki/Low-pass_filter#:~:text=A%20low%2Dpass%20filter%20is,depends%20on%20the%20filter%20design.")
+def info_highpass(*args):
+    webbrowser.open("https://en.wikipedia.org/wiki/High-pass_filter")
+def info_gausspass(*args):
+    webbrowser.open("https://en.wikipedia.org/wiki/Gaussian_filter#:~:text=In%20electronics%20and%20signal%20processing,would%20have%20infinite%20impulse%20response).")    
+def info_nonlocal(*args):
+    webbrowser.open("https://en.wikipedia.org/wiki/Non-local_means")
+    
+# Binding function to open webpage that offers the user information on the specific label (what is TR, TE, etc...?)    
+Low_pass_button.bind('<Button-3>', info_lowpass)
+High_pass_button.bind('<Button-3>', info_highpass)
+Gaussian_button.bind('<Button-3>', info_gausspass)
+Non_local_button.bind('<Button-3>', info_nonlocal)
 
 # //////////////////////////////////////////////////////////////// #
 #################### Frame regarding the saving ####################
