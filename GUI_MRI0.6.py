@@ -549,6 +549,9 @@ def run():
     global Data_mat
     global Resolution
     global Bandwidth
+    global Labels
+    global ax_pos
+    global ax_label
     global Alpha
     global final_seq
     global S
@@ -557,6 +560,9 @@ def run():
     global final_im_sag
     global final_im_cor
     global final_im_ax
+    global final_im_sag_original
+    global final_im_cor_original
+    global final_im_ax_original
     global minimumTE
     global minimumTR
     
@@ -713,11 +719,13 @@ def run():
         Bd_by_pixel = np.divide(Bandwidth,Data_mat[0])
         
         # Plotting the parameters
-        Time_scan_num_label.grid_forget()
-        Time_scan_num_label = Label(frame3, text = str(time), font=("Helvetica", 12));               Time_scan_num_label.grid(row = 1, column = 7)
+        Time_scan_num_label = Label(frame3, text = str(time),font=("Helvetica",12))
+        Time_scan_num_label.grid(row = 1, column = 7)
         s = str(Data_mat[0]) + "x" + str(Data_mat[1]) + "x" + str(Data_mat[2])
-        Data_mat1_label = Label(frame3, text = s, font=("Helvetica", 12));                           Data_mat1_label.grid(row = 2, column = 7)
-        Bd_by_pixel_label = Label(frame3, text = str(round(Bd_by_pixel,2)), font=("Helvetica", 12)); Bd_by_pixel_label.grid(row = 3, column = 7)
+        Data_mat1_label = Label(frame3, text = s, font=("Helvetica", 12))
+        Data_mat1_label.grid(row = 2, column = 7)
+        Bd_by_pixel_label = Label(frame3, text = str(round(Bd_by_pixel,2)), font=("Helvetica", 12))
+        Bd_by_pixel_label.grid(row = 3, column = 7)
 
         # loading the 3D distorted data
         T1_3D_grad = np.load('T1_3D_gradientdistortion02.npy')
@@ -769,7 +777,7 @@ def run():
                 final_seq[:,x,:] = cv2.resize(n_seq[:,x,:], dsize=(Data_mat[2], Data_mat[0]))
 
         elif Pre_def_seq == 'GE':         
-            angle = flipAngleMaprescale_3D/Alpha
+            angle = flipAngleMaprescale_3D_grad/Alpha
             GE_3D = Gradient_seq(TR, TE, T1_3D_grad, t2_star_3D_grad, M0_3D_grad, angle); GE_3D = np.multiply(GE_3D, B1map_3D_grad)
 
             # Resizing
@@ -854,6 +862,9 @@ def run():
         final_im_sag = final_seq[S[0],:,:]
         final_im_cor = final_seq[:,S[1],:]
         final_im_ax = final_seq[:,:,S[2]]
+        final_im_sag_original = final_im_sag
+        final_im_cor_original = final_im_cor
+        final_im_ax_original = final_im_ax
 
         # To change the axis value to mm (the fov)
         ax_pos = [[0, Data_mat[0]/2, Data_mat[0]-1], [0, Data_mat[1]/2, Data_mat[1]-1], [0, Data_mat[2]/2, Data_mat[2]-1]]
@@ -1022,7 +1033,7 @@ def param_vis():
         plt.show()
         
     elif Pre_def_seq == 'GE':         
-        angle = flipAngleMaprescale_3D/Alpha
+        angle = flipAngleMaprescale_3D_grad/Alpha
         GE_3D = Gradient_seq(TR, TE, T1_3D_grad, t2_star_3D_grad, M0_3D_grad, angle); GE_3D = np.multiply(GE_3D, B1map_3D_grad)
     
         # Resizing
@@ -1905,6 +1916,47 @@ Gaussian_button = Button(frame4, text = "Gaussian filter", font=("Helvetica", f)
 Gaussian_button.grid(row = 3, column = 4) 
 Non_local_button = Button(frame4, text = "Non local filter", font=("Helvetica", f), command = lambda: non_local(Non_local_h_entry.get(), Non_local_psize_entry.get(), Non_local_pdist_entry.get()))
 Non_local_button.grid(row = 4, column = 4) 
+
+def filter_undo():
+    global final_im_sag_original 
+    global final_im_cor_original 
+    global final_im_ax_original 
+    global Labels
+    global ax_pos
+    global ax_label
+    
+    # Create axial plot
+    fig = plt.figure(figsize=(imag_size,imag_size))
+    plt.imshow(np.rot90(final_im_ax_original, k = 1), cmap='gray')
+    plt.xlabel(Labels[0]); plt.xticks(ax_pos[0], ax_label[0])
+    plt.ylabel(Labels[1]); plt.yticks(ax_pos[1], ax_label[1])
+    canvas = FigureCanvasTkAgg(fig, root)                
+    canvas.draw()
+    canvas.get_tk_widget().grid(row = 1, column = 3, rowspan = 4)     
+    plt.close()
+
+    # Create coronal plot
+    fig = plt.figure(figsize=(imag_size,imag_size))
+    plt.imshow(np.rot90(final_im_cor_original, k = 1), cmap='gray')   
+    plt.xlabel(Labels[0]); plt.xticks(ax_pos[0], ax_label[0])
+    plt.ylabel(Labels[2]); plt.yticks(ax_pos[2], ax_label[2])
+    canvas = FigureCanvasTkAgg(fig, root)         
+    canvas.draw()
+    canvas.get_tk_widget().grid(row = 1, column = 2, rowspan = 4)
+    plt.close()
+
+    # Create sagittal plot
+    fig = plt.figure(figsize=(imag_size,imag_size))
+    plt.imshow(np.rot90(final_im_sag_original, k = 1), cmap='gray')   
+    plt.xlabel(Labels[1]); plt.xticks(ax_pos[1], ax_label[1])
+    plt.ylabel(Labels[2]); plt.yticks(ax_pos[2], ax_label[2])
+    canvas = FigureCanvasTkAgg(fig, root)         
+    canvas.draw()
+    canvas.get_tk_widget().grid(row = 1, column = 1, rowspan = 4) 
+    plt.close()
+
+fil_undo_button = Button(frame4, text = "Reset sequence image unfiltered", font=("Helvetica", f), command = filter_undo)
+fil_undo_button.grid(row = 6, column = 0)
 
 Param_vis_button = Button(frame4, text = "Parameters visualization", font=("Helvetica", f), command = param_vis).grid(row = 6, column = 1, columnspan = 3)
 
